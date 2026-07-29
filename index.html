@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>ITR Computation Sheet — AY 2026-27</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+
+<!-- PWA / Android install support -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1C2541">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ITR Sheet">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+</style>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+<div id="root">
+  <div id="loading-fallback" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#6B7280;padding:24px;text-align:center;">
+    <div>Loading ITR Computation Sheet&hellip;</div>
+    <div id="slow-notice" style="display:none;margin-top:16px;max-width:340px;font-size:13px;line-height:1.5;">
+      This is taking longer than expected. Please check your internet connection and reload the page.
+      If it still doesn't load, the app couldn't reach one of its required files (React/Tailwind/XLSX) &mdash;
+      try again on Wi-Fi or a different network.
+    </div>
+  </div>
+</div>
+<script>
+  setTimeout(function () {
+    var n = document.getElementById("slow-notice");
+    if (n) n.style.display = "block";
+  }, 8000);
+  window.addEventListener("error", function (e) {
+    var root = document.getElementById("root");
+    if (root && root.innerText.indexOf("Loading ITR") !== -1) {
+      root.innerHTML =
+        '<div style="padding:24px;font-family:sans-serif;color:#A63A2E;max-width:420px;margin:60px auto;text-align:center;">' +
+        '<div style="font-weight:600;margin-bottom:8px;">Something went wrong loading the app</div>' +
+        '<div style="font-size:13px;color:#6B7280;">' + (e.message || "Unknown error") + '</div>' +
+        '<div style="font-size:12px;color:#6B7280;margin-top:12px;">Try reloading, or check your internet connection.</div>' +
+        '</div>';
+    }
+  });
+</script>
+
+<script>
+const { useState, useMemo } = React;
+
+/* ---------------------------------------------------------------
+   DESIGN TOKENS
+--------------------------------------------------------------- */
+const COLOR = {
+  ink: "#1C2541",
+  paper: "#F6F1E7",
+  card: "#FFFDF8",
+  vermilion: "#A63A2E",
+  gold: "#B8863B",
+  green: "#2F6844",
+  slate: "#6B7280",
+  line: "#D9D0BC",
+};
+const FONT = {
+  display: "\'Fraunces\', serif",
+  body: "\'IBM Plex Sans\', sans-serif",
+  mono: "\'IBM Plex Mono\', monospace",
+};
+
+/* ---------------------------------------------------------------
+   ICONS (inline SVG -- no external icon package needed)
+--------------------------------------------------------------- */
+function IconInfo({ size = 16, color = "currentColor", style, className }) {
+    return (React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", style: style, className: className },
+        React.createElement("circle", { cx: "12", cy: "12", r: "10" }),
+        React.createElement("line", { x1: "12", y1: "16", x2: "12", y2: "12" }),
+        React.createElement("line", { x1: "12", y1: "8", x2: "12.01", y2: "8" })));
+}
+function IconArrows({ size = 16, color = "currentColor", style, className }) {
+    return (React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", style: style, className: className },
+        React.createElement("polyline", { points: "17 1 21 5 17 9" }),
+        React.createElement("path", { d: "M3 11V9a4 4 0 0 1 4-4h14" }),
+        React.createElement("polyline", { points: "7 23 3 19 7 15" }),
+        React.createElement("path", { d: "M21 13v2a4 4 0 0 1-4 4H3" })));
+}
+function IconAlert({ size = 16, color = "currentColor", style, className }) {
+    return (React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", style: style, className: className },
+        React.createElement("path", { d: "M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" }),
+        React.createElement("line", { x1: "12", y1: "9", x2: "12", y2: "13" }),
+        React.createElement("line", { x1: "12", y1: "17", x2: "12.01", y2: "17" })));
+}
+function IconLandmark({ size = 16, color = "currentColor", style, className }) {
+    return (React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", style: style, className: className },
+        React.createElement("line", { x1: "3", y1: "22", x2: "21", y2: "22" }),
+        React.createElement("line", { x1: "6", y1: "18", x2: "6", y2: "11" }),
+        React.createElement("line", { x1: "10", y1: "18", x2: "10", y2: "11" }),
+        React.createElement("line", { x1: "14", y1: "18", x2: "14", y2: "11" }),
+        React.createElement("line", { x1: "18", y1: "18", x2: "18", y2: "11" }),
+        React.createElement("polygon", { points: "12 2 20 7 4 7" })));
+}
+function IconStamp({ size = 16, color = "currentColor", style, className }) {
+    return (React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", style: style, className: className },
+        React.createElement("circle", { cx: "12", cy: "4", r: "1.6" }),
+        React.createElement("path", { d: "M9 8h6" }),
+        React.createElement("path", { d: "M12 6v6" }),
+        React.createElement("path", { d: "M9.5 21v-5a2.5 2.5 0 0 1 5 0v5" }),
+        React.createElement("path", { d: "M5 21h14" })));
+}
+function IconDownload({ size = 16, color = "currentColor", style, className }) {
+    return (React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", style: style, className: className },
+        React.createElement("path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" }),
+        React.createElement("polyline", { points: "7 10 12 15 17 10" }),
+        React.createElement("line", { x1: "12", y1: "15", x2: "12", y2: "3" })));
+}
+function IconFile({ size = 16, color = "currentColor", style, className }) {
+    return (React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", style: style, className: className },
+        React.createElement("path", { d: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" }),
+        React.createElement("polyline", { points: "14 2 14 8 20 8" })));
+}
+function IconFileGrid({ size = 16, color = "currentColor", style, className }) {
+    return (React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", style: style, className: className },
+        React.createElement("path", { d: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" }),
+        React.createElement("polyline", { points: "14 2 14 8 20 8" }),
+        React.createElement("line", { x1: "8", y1: "13", x2: "16", y2: "13" }),
+        React.createElement("line", { x1: "8", y1: "17", x2: "16", y2: "17" })));
+}
+/* ---------------------------------------------------------------
+   TAX ENGINE  (AY 2026-27 / FY 2025-26 — simplified for estimation)
+--------------------------------------------------------------- */
+const NEW_SLABS = [
+    [400000, 0],
+    [800000, 0.05],
+    [1200000, 0.1],
+    [1600000, 0.15],
+    [2000000, 0.2],
+    [2400000, 0.25],
+    [Infinity, 0.3],
+];
+const OLD_SLABS = {
+    below60: [[250000, 0], [500000, 0.05], [1000000, 0.2], [Infinity, 0.3]],
+    senior: [[300000, 0], [500000, 0.05], [1000000, 0.2], [Infinity, 0.3]],
+    superSenior: [[500000, 0], [1000000, 0.2], [Infinity, 0.3]],
+};
+function slabTax(income, brackets) {
+    let tax = 0;
+    let prev = 0;
+    for (const [limit, rate] of brackets) {
+        if (income > prev) {
+            const chunk = Math.min(income, limit) - prev;
+            tax += chunk * rate;
+            prev = limit;
+        }
+        else
+            break;
+    }
+    return tax;
+}
+function formatINR(n) {
+    const r = Math.round(n || 0);
+    const sign = r < 0 ? "-" : "";
+    return sign + "₹" + Math.abs(r).toLocaleString("en-IN");
+}
+function computeRegime(regime, inputs) {
+    const { itrType, ageCategory, grossSalary, hraReceived, rentPaid, isMetro, basicSalary, otherSalaryExemption, selfOccupied, annualValueLetOut, municipalTaxes, homeLoanInterest, stcgEquity, ltcgEquity, businessType, turnoverOrReceipts, digitalReceipts, netProfitRegular, interestIncome, dividendIncome, otherIncome, deduction80C, deduction80D, deduction80CCD1B, deduction80CCD2, deduction80TTA, deduction80G, otherDeductions, tdsPaid, advanceTaxPaid, } = inputs;
+    const stdDeduction = regime === "new" ? 75000 : 50000;
+    // Sec 10(13A) HRA exemption — Old Regime only, fully rule-based
+    let hraExemption = 0;
+    if (regime === "old") {
+        const excessRent = Math.max(0, rentPaid - 0.1 * basicSalary);
+        const limitPct = (isMetro ? 0.5 : 0.4) * basicSalary;
+        hraExemption = Math.max(0, Math.min(hraReceived, excessRent, limitPct));
+    }
+    const otherExempt = regime === "old" ? otherSalaryExemption : 0;
+    const netSalary = Math.max(0, grossSalary - stdDeduction - hraExemption - otherExempt);
+    // Sec 24(b) house property
+    let hpIncome = 0;
+    if (selfOccupied) {
+        hpIncome = regime === "old" ? -Math.min(homeLoanInterest, 200000) : 0;
+    }
+    else {
+        const nav = Math.max(0, annualValueLetOut - municipalTaxes);
+        hpIncome = nav - nav * 0.3 - homeLoanInterest;
+    }
+    // Sec 44AD / 44ADA presumptive, or regular books
+    let businessIncome = 0;
+    if (itrType === "ITR34") {
+        if (businessType === "presumptive44AD") {
+            businessIncome = turnoverOrReceipts * (digitalReceipts ? 0.06 : 0.08);
+        }
+        else if (businessType === "presumptive44ADA") {
+            businessIncome = turnoverOrReceipts * 0.5;
+        }
+        else {
+            businessIncome = netProfitRegular;
+        }
+    }
+    const otherSourcesIncome = interestIncome + dividendIncome + otherIncome;
+    const normalIncome = netSalary + hpIncome + businessIncome + otherSourcesIncome;
+    // Sec 111A / 112A capital gains
+    const ltcgTaxable = Math.max(0, ltcgEquity - 125000);
+    const capGainsTax = ltcgTaxable * 0.125 + stcgEquity * 0.2;
+    // Chapter VI-A — auto-capped per current section limits
+    const cap80C = Math.min(deduction80C, 150000);
+    const cap80CCD1B = Math.min(deduction80CCD1B, 50000);
+    const cap80CCD2 = Math.min(deduction80CCD2, basicSalary * (regime === "new" ? 0.14 : 0.1));
+    const seniorOrAbove = ageCategory !== "below60";
+    const cap80D = Math.min(deduction80D, seniorOrAbove ? 50000 : 25000);
+    const cap80TTA = Math.min(deduction80TTA, seniorOrAbove ? 50000 : 10000);
+    let deductions = cap80CCD2; // allowed under both regimes
+    if (regime === "old") {
+        deductions += cap80C + cap80D + cap80CCD1B + cap80TTA + deduction80G + otherDeductions;
+    }
+    const taxableNormalIncome = Math.max(0, normalIncome - deductions);
+    const totalTaxableIncome = taxableNormalIncome + ltcgTaxable + stcgEquity;
+    const brackets = regime === "new" ? NEW_SLABS : OLD_SLABS[ageCategory];
+    const slab = slabTax(taxableNormalIncome, brackets);
+    // Sec 87A rebate with marginal relief
+    let rebate = 0;
+    if (regime === "new") {
+        if (totalTaxableIncome <= 1200000)
+            rebate = slab;
+        else {
+            const excess = totalTaxableIncome - 1200000;
+            if (slab > excess)
+                rebate = slab - excess;
+        }
+    }
+    else {
+        if (totalTaxableIncome <= 500000)
+            rebate = Math.min(slab, 12500);
+    }
+    const slabAfterRebate = Math.max(0, slab - rebate);
+    const taxBeforeSurcharge = slabAfterRebate + capGainsTax;
+    // Surcharge slabs
+    let surchargeRate = 0;
+    if (totalTaxableIncome > 50000000)
+        surchargeRate = regime === "new" ? 0.25 : 0.37;
+    else if (totalTaxableIncome > 20000000)
+        surchargeRate = 0.25;
+    else if (totalTaxableIncome > 10000000)
+        surchargeRate = 0.15;
+    else if (totalTaxableIncome > 5000000)
+        surchargeRate = 0.1;
+    const surcharge = taxBeforeSurcharge * surchargeRate;
+    // Health & Education Cess
+    const cess = (taxBeforeSurcharge + surcharge) * 0.04;
+    const totalTaxLiability = taxBeforeSurcharge + surcharge + cess;
+    const taxesPaid = tdsPaid + advanceTaxPaid;
+    const netPayable = totalTaxLiability - taxesPaid;
+    return {
+        stdDeduction, hraExemption, netSalary, hpIncome, businessIncome, otherSourcesIncome, normalIncome,
+        deductions, taxableNormalIncome, capGainsTax, totalTaxableIncome,
+        slab, rebate, slabAfterRebate, surcharge, cess, totalTaxLiability,
+        taxesPaid, netPayable, surchargeRate,
+    };
+}
+/* ---------------------------------------------------------------
+   REUSABLE FIELDS
+--------------------------------------------------------------- */
+function NumField({ label, value, onChange, hint }) {
+    return (React.createElement("label", { className: "block" },
+        React.createElement("span", { className: "block mb-1", style: { fontFamily: FONT.body, fontSize: 13, color: COLOR.slate } }, label),
+        React.createElement("div", { className: "flex items-center rounded-md overflow-hidden", style: { border: `1px solid ${COLOR.line}`, background: "#fff" } },
+            React.createElement("span", { className: "pl-3 pr-1", style: { color: COLOR.slate, fontFamily: FONT.mono, fontSize: 13 } }, "\u20B9"),
+            React.createElement("input", { type: "number", value: value === 0 ? "" : value, placeholder: "0", onChange: (e) => onChange(Number(e.target.value) || 0), className: "w-full py-2 pr-3 text-right outline-none bg-transparent", style: { fontFamily: FONT.mono, fontSize: 14, color: COLOR.ink } })),
+        hint && (React.createElement("div", { className: "flex items-start gap-1 mt-1" },
+            React.createElement(IconInfo, { size: 11, color: COLOR.gold, style: { flexShrink: 0, marginTop: 2 } }),
+            React.createElement("span", { style: { fontFamily: FONT.body, fontSize: 11, color: COLOR.slate, lineHeight: 1.4 } }, hint)))));
+}
+function TextField({ label, value, onChange, hint, placeholder, maxLength, uppercase }) {
+    return (React.createElement("label", { className: "block" },
+        React.createElement("span", { className: "block mb-1", style: { fontFamily: FONT.body, fontSize: 13, color: COLOR.slate } }, label),
+        React.createElement("input", { type: "text", value: value, placeholder: placeholder || "", maxLength: maxLength, onChange: (e) => onChange(uppercase ? e.target.value.toUpperCase() : e.target.value), className: "w-full py-2 px-3 rounded-md outline-none bg-white", style: { border: `1px solid ${COLOR.line}`, fontFamily: FONT.mono, fontSize: 14, color: COLOR.ink, letterSpacing: uppercase ? "0.04em" : "normal" } }),
+        hint && (React.createElement("div", { className: "flex items-start gap-1 mt-1" },
+            React.createElement(IconInfo, { size: 11, color: COLOR.gold, style: { flexShrink: 0, marginTop: 2 } }),
+            React.createElement("span", { style: { fontFamily: FONT.body, fontSize: 11, color: COLOR.slate, lineHeight: 1.4 } }, hint)))));
+}
+function SelectField({ label, value, onChange, options, hint }) {
+    return (React.createElement("label", { className: "block" },
+        React.createElement("span", { className: "block mb-1", style: { fontFamily: FONT.body, fontSize: 13, color: COLOR.slate } }, label),
+        React.createElement("select", { value: value, onChange: (e) => onChange(e.target.value), className: "w-full py-2 px-3 rounded-md outline-none bg-white", style: { border: `1px solid ${COLOR.line}`, fontFamily: FONT.body, fontSize: 14, color: COLOR.ink } }, options.map((o) => (React.createElement("option", { key: o.value, value: o.value }, o.label)))),
+        hint && (React.createElement("div", { className: "flex items-start gap-1 mt-1" },
+            React.createElement(IconInfo, { size: 11, color: COLOR.gold, style: { flexShrink: 0, marginTop: 2 } }),
+            React.createElement("span", { style: { fontFamily: FONT.body, fontSize: 11, color: COLOR.slate, lineHeight: 1.4 } }, hint)))));
+}
+function CheckField({ label, checked, onChange, hint }) {
+    return (React.createElement("div", { className: "py-1" },
+        React.createElement("label", { className: "flex items-center gap-2 cursor-pointer select-none" },
+            React.createElement("input", { type: "checkbox", checked: checked, onChange: (e) => onChange(e.target.checked), className: "w-4 h-4" }),
+            React.createElement("span", { style: { fontFamily: FONT.body, fontSize: 13, color: COLOR.ink } }, label)),
+        hint && (React.createElement("div", { className: "flex items-start gap-1 mt-1 ml-6" },
+            React.createElement(IconInfo, { size: 11, color: COLOR.gold, style: { flexShrink: 0, marginTop: 2 } }),
+            React.createElement("span", { style: { fontFamily: FONT.body, fontSize: 11, color: COLOR.slate, lineHeight: 1.4 } }, hint)))));
+}
+function ReadOnlyRow({ label, value }) {
+    return (React.createElement("div", { className: "sm:col-span-2 flex justify-between items-baseline py-2 px-3 rounded-md", style: { background: "#EFE8D8" } },
+        React.createElement("span", { style: { fontFamily: FONT.body, fontSize: 12, color: COLOR.slate } }, label),
+        React.createElement("span", { style: { fontFamily: FONT.mono, fontSize: 13, color: COLOR.ink, fontWeight: 600 } }, value)));
+}
+function Section({ title, eyebrow, children }) {
+    return (React.createElement("div", { className: "rounded-lg p-5 mb-5", style: { background: COLOR.card, border: `1px solid ${COLOR.line}` } },
+        eyebrow && (React.createElement("p", { className: "mb-1 uppercase", style: { fontFamily: FONT.body, fontSize: 11, letterSpacing: "0.12em", color: COLOR.gold } }, eyebrow)),
+        React.createElement("h3", { className: "mb-4", style: { fontFamily: FONT.display, fontSize: 20, color: COLOR.ink } }, title),
+        React.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-4" }, children)));
+}
+function LedgerRow({ label, value, bold, negative }) {
+    return (React.createElement("div", { className: "flex items-baseline gap-2 py-1" },
+        React.createElement("span", { style: { fontFamily: FONT.body, fontSize: 13, color: bold ? COLOR.ink : COLOR.slate, fontWeight: bold ? 600 : 400, whiteSpace: "nowrap" } }, label),
+        React.createElement("span", { className: "flex-1", style: { borderBottom: `1px dotted ${COLOR.line}`, marginBottom: 4 } }),
+        React.createElement("span", { style: { fontFamily: FONT.mono, fontSize: 13, color: negative ? COLOR.vermilion : COLOR.ink, fontWeight: bold ? 600 : 400 } }, formatINR(value))));
+}
+/* ---------------------------------------------------------------
+   MAIN COMPONENT
+--------------------------------------------------------------- */
+function ITRDashboard() {
+    const [itrType, setItrType] = useState("ITR1");
+    const [ageCategory, setAgeCategory] = useState("below60");
+    const [selectedRegime, setSelectedRegime] = useState("new");
+    // Personal details
+    const [fullName, setFullName] = useState("");
+    const [pan, setPan] = useState("");
+    const [aadhaar, setAadhaar] = useState("");
+    const [dob, setDob] = useState("");
+    const [fatherName, setFatherName] = useState("");
+    const [mobile, setMobile] = useState("");
+    const [email, setEmail] = useState("");
+    const [addressLine, setAddressLine] = useState("");
+    const [city, setCity] = useState("");
+    const [state, setState] = useState("");
+    const [pincode, setPincode] = useState("");
+    const [residentialStatus, setResidentialStatus] = useState("resident");
+    const [filingSection, setFilingSection] = useState("139(1)");
+    const [bankName, setBankName] = useState("");
+    const [bankAccount, setBankAccount] = useState("");
+    const [ifsc, setIfsc] = useState("");
+    const [grossSalary, setGrossSalary] = useState(1200000);
+    const [basicSalary, setBasicSalary] = useState(600000);
+    const [hraReceived, setHraReceived] = useState(240000);
+    const [rentPaid, setRentPaid] = useState(180000);
+    const [isMetro, setIsMetro] = useState(true);
+    const [otherSalaryExemption, setOtherSalaryExemption] = useState(0);
+    const [selfOccupied, setSelfOccupied] = useState(true);
+    const [annualValueLetOut, setAnnualValueLetOut] = useState(0);
+    const [municipalTaxes, setMunicipalTaxes] = useState(0);
+    const [homeLoanInterest, setHomeLoanInterest] = useState(0);
+    const [stcgEquity, setStcgEquity] = useState(0);
+    const [ltcgEquity, setLtcgEquity] = useState(0);
+    const [businessType, setBusinessType] = useState("presumptive44AD");
+    const [turnoverOrReceipts, setTurnoverOrReceipts] = useState(0);
+    const [digitalReceipts, setDigitalReceipts] = useState(true);
+    const [netProfitRegular, setNetProfitRegular] = useState(0);
+    const [interestIncome, setInterestIncome] = useState(0);
+    const [dividendIncome, setDividendIncome] = useState(0);
+    const [otherIncome, setOtherIncome] = useState(0);
+    const [deduction80C, setDeduction80C] = useState(0);
+    const [deduction80D, setDeduction80D] = useState(0);
+    const [deduction80CCD1B, setDeduction80CCD1B] = useState(0);
+    const [deduction80CCD2, setDeduction80CCD2] = useState(0);
+    const [deduction80TTA, setDeduction80TTA] = useState(0);
+    const [deduction80G, setDeduction80G] = useState(0);
+    const [otherDeductions, setOtherDeductions] = useState(0);
+    const [tdsPaid, setTdsPaid] = useState(0);
+    const [advanceTaxPaid, setAdvanceTaxPaid] = useState(0);
+    const [exportMsg, setExportMsg] = useState("");
+    const inputs = {
+        itrType, ageCategory,
+        grossSalary, hraReceived, rentPaid, isMetro, basicSalary, otherSalaryExemption,
+        selfOccupied, annualValueLetOut, municipalTaxes, homeLoanInterest,
+        stcgEquity, ltcgEquity,
+        businessType, turnoverOrReceipts, digitalReceipts, netProfitRegular,
+        interestIncome, dividendIncome, otherIncome,
+        deduction80C, deduction80D, deduction80CCD1B, deduction80CCD2,
+        deduction80TTA, deduction80G, otherDeductions,
+        tdsPaid, advanceTaxPaid,
+    };
+    const oldCalc = useMemo(() => computeRegime("old", inputs), [JSON.stringify(inputs)]);
+    const newCalc = useMemo(() => computeRegime("new", inputs), [JSON.stringify(inputs)]);
+    const selected = selectedRegime === "old" ? oldCalc : newCalc;
+    const recommended = oldCalc.totalTaxLiability <= newCalc.totalTaxLiability ? "old" : "new";
+    const maxTax = Math.max(oldCalc.totalTaxLiability, newCalc.totalTaxLiability, 1);
+    const showCapGains = itrType === "ITR2" || itrType === "ITR34";
+    const showBusiness = itrType === "ITR34";
+    const tabs = [
+        { key: "ITR1", label: "ITR-1", sub: "Salary / One House Property" },
+        { key: "ITR2", label: "ITR-2", sub: "Capital Gains / Multiple Properties" },
+        { key: "ITR34", label: "ITR-3/4", sub: "Business & Profession" },
+    ];
+    /* ---------------- EXPORTS ---------------- */
+    function triggerDownload(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+    function buildComputationObject() {
+        var _a;
+        return {
+            assessmentYear: "2026-27",
+            financialYear: "2025-26",
+            itrForm: (_a = tabs.find((t) => t.key === itrType)) === null || _a === void 0 ? void 0 : _a.label,
+            generatedOn: new Date().toISOString(),
+            personalDetails: {
+                fullName, pan, aadhaar, dateOfBirth: dob, fatherName, mobile, email,
+                address: { addressLine, city, state, pincode },
+                residentialStatus, filingSection, ageCategory,
+                bankDetails: { bankName, bankAccount, ifsc },
+            },
+            schedules: {
+                scheduleS_Salary: { grossSalary, basicSalary, hraReceived, rentPaid, isMetro, otherSalaryExemption },
+                scheduleHP_HouseProperty: { selfOccupied, annualValueLetOut, municipalTaxes, homeLoanInterest },
+                scheduleCG_CapitalGains: showCapGains ? { stcgEquity_111A: stcgEquity, ltcgEquity_112A: ltcgEquity } : null,
+                scheduleBP_BusinessProfession: showBusiness ? { businessType, turnoverOrReceipts, digitalReceipts, netProfitRegular } : null,
+                scheduleOS_OtherSources: { interestIncome, dividendIncome, otherIncome },
+                scheduleVIA_Deductions: {
+                    sec80C: deduction80C, sec80D: deduction80D, sec80CCD1B: deduction80CCD1B,
+                    sec80CCD2: deduction80CCD2, sec80TTA_TTB: deduction80TTA, sec80G: deduction80G, other: otherDeductions,
+                },
+                taxesPaid: { tds: tdsPaid, advanceOrSelfAssessment: advanceTaxPaid },
+            },
+            computation: {
+                oldRegime: oldCalc,
+                newRegime: newCalc,
+                recommendedRegime: recommended,
+            },
+            filingSelection: {
+                regimeSelected: selectedRegime,
+                netResultType: selected.netPayable > 0 ? "TAX_PAYABLE" : "REFUND_DUE",
+                netAmount: Math.round(Math.abs(selected.netPayable)),
+            },
+            note: "Structured computation summary for reference and import mapping. This is not the official Income Tax Department JSON schema — verify all figures on the e-filing portal before filing.",
+        };
+    }
+    function exportJSON() {
+        const obj = buildComputationObject();
+        const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
+        triggerDownload(blob, `ITR-Computation-AY2026-27.json`);
+        setExportMsg("JSON downloaded");
+        setTimeout(() => setExportMsg(""), 2500);
+    }
+    function exportExcel() {
+        var _a;
+        const wb = XLSX.utils.book_new();
+        const personalRows = [
+            ["Personal Details", ""],
+            ["Full Name", fullName],
+            ["PAN", pan],
+            ["Aadhaar Number", aadhaar],
+            ["Date of Birth", dob],
+            ["Father's Name", fatherName],
+            ["Residential Status", residentialStatus],
+            ["Return Filed Under", filingSection],
+            ["Mobile", mobile],
+            ["Email", email],
+            ["Address", addressLine],
+            ["City", city],
+            ["State", state],
+            ["PIN Code", pincode],
+            [],
+            ["Bank Details (for refund)", ""],
+            ["Bank Name", bankName],
+            ["Account Number", bankAccount],
+            ["IFSC Code", ifsc],
+        ];
+        const wsPersonal = XLSX.utils.aoa_to_sheet(personalRows);
+        wsPersonal["!cols"] = [{ wch: 26 }, { wch: 28 }];
+        XLSX.utils.book_append_sheet(wb, wsPersonal, "Personal Details");
+        const summaryRows = [
+            ["ITR Computation Summary — AY 2026-27", "", ""],
+            ["Form", (_a = tabs.find((t) => t.key === itrType)) === null || _a === void 0 ? void 0 : _a.label, ""],
+            [],
+            ["Particulars", "Old Regime", "New Regime"],
+            ["Standard Deduction", oldCalc.stdDeduction, newCalc.stdDeduction],
+            ["HRA Exemption (Sec 10(13A))", oldCalc.hraExemption, newCalc.hraExemption],
+            ["Income from Salary", oldCalc.netSalary, newCalc.netSalary],
+            ["Income from House Property", oldCalc.hpIncome, newCalc.hpIncome],
+            ["Income from Business/Profession", oldCalc.businessIncome, newCalc.businessIncome],
+            ["Income from Other Sources", oldCalc.otherSourcesIncome, newCalc.otherSourcesIncome],
+            ["Gross Total Income (normal rate)", oldCalc.normalIncome, newCalc.normalIncome],
+            ["Less: Chapter VI-A Deductions", -oldCalc.deductions, -newCalc.deductions],
+            ["Taxable Income (normal rate)", oldCalc.taxableNormalIncome, newCalc.taxableNormalIncome],
+            ["Tax on Capital Gains (special rate)", oldCalc.capGainsTax, newCalc.capGainsTax],
+            ["Tax on Slab Income", oldCalc.slab, newCalc.slab],
+            ["Less: Rebate u/s 87A", -oldCalc.rebate, -newCalc.rebate],
+            ["Add: Surcharge", oldCalc.surcharge, newCalc.surcharge],
+            ["Add: Health & Education Cess (4%)", oldCalc.cess, newCalc.cess],
+            ["Total Tax Liability", oldCalc.totalTaxLiability, newCalc.totalTaxLiability],
+            ["Less: TDS / Advance Tax Paid", -oldCalc.taxesPaid, -newCalc.taxesPaid],
+            ["Net Payable (+) / Refund (-)", oldCalc.netPayable, newCalc.netPayable],
+            [],
+            ["Recommended Regime", recommended === "old" ? "Old Regime" : "New Regime", ""],
+            ["Selected for Filing", selectedRegime === "old" ? "Old Regime" : "New Regime", ""],
+        ];
+        const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
+        wsSummary["!cols"] = [{ wch: 34 }, { wch: 16 }, { wch: 16 }];
+        XLSX.utils.book_append_sheet(wb, wsSummary, "Computation Summary");
+        const incomeRows = [
+            ["Schedule S — Salary", ""],
+            ["Gross Salary", grossSalary],
+            ["Basic Salary (Annual)", basicSalary],
+            ["HRA Received", hraReceived],
+            ["Rent Paid (Annual)", rentPaid],
+            ["Metro City", isMetro ? "Yes" : "No"],
+            ["Other Exemptions (LTA etc.)", otherSalaryExemption],
+            [],
+            ["Schedule HP — House Property", ""],
+            ["Self-Occupied", selfOccupied ? "Yes" : "No"],
+            ["Annual Rent Received (if let-out)", annualValueLetOut],
+            ["Municipal Taxes Paid", municipalTaxes],
+            ["Home Loan Interest", homeLoanInterest],
+            [],
+        ];
+        if (showCapGains) {
+            incomeRows.push(["Schedule CG — Capital Gains", ""], ["STCG — Sec 111A", stcgEquity], ["LTCG — Sec 112A", ltcgEquity], []);
+        }
+        if (showBusiness) {
+            incomeRows.push(["Schedule BP — Business/Profession", ""], ["Basis", businessType], ["Turnover/Receipts", turnoverOrReceipts], ["Digital Receipts", digitalReceipts ? "Yes" : "No"], ["Net Profit (regular books)", netProfitRegular], []);
+        }
+        incomeRows.push(["Schedule OS — Other Sources", ""], ["Interest Income", interestIncome], ["Dividend Income", dividendIncome], ["Other Income", otherIncome], [], ["Schedule VI-A — Deductions", ""], ["Sec 80C", deduction80C], ["Sec 80D", deduction80D], ["Sec 80CCD(1B)", deduction80CCD1B], ["Sec 80CCD(2)", deduction80CCD2], ["Sec 80TTA/80TTB", deduction80TTA], ["Sec 80G", deduction80G], ["Other Deductions", otherDeductions], [], ["Taxes Paid", ""], ["TDS/TCS", tdsPaid], ["Advance/Self-Assessment Tax", advanceTaxPaid]);
+        const wsIncome = XLSX.utils.aoa_to_sheet(incomeRows);
+        wsIncome["!cols"] = [{ wch: 32 }, { wch: 16 }];
+        XLSX.utils.book_append_sheet(wb, wsIncome, "Income & Deductions");
+        const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+        const blob = new Blob([wbout], { type: "application/octet-stream" });
+        triggerDownload(blob, `ITR-Computation-AY2026-27.xlsx`);
+        setExportMsg("Excel downloaded");
+        setTimeout(() => setExportMsg(""), 2500);
+    }
+    return (React.createElement("div", { style: { background: COLOR.paper, minHeight: "100vh", fontFamily: FONT.body } },
+        React.createElement("style", null, `
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+      `),
+        React.createElement("div", { style: { background: COLOR.ink }, className: "px-6 md:px-10 py-6" },
+            React.createElement("div", { className: "flex items-center justify-between max-w-6xl mx-auto flex-wrap gap-4" },
+                React.createElement("div", null,
+                    React.createElement("p", { className: "uppercase mb-1", style: { color: COLOR.gold, fontSize: 11, letterSpacing: "0.18em" } }, "Computation Utility \u00B7 Assessment Year 2026-27"),
+                    React.createElement("h1", { style: { fontFamily: FONT.display, fontSize: 30, color: COLOR.paper, fontWeight: 600 } }, "ITR Computation Sheet")),
+                React.createElement("div", { className: "flex items-center gap-2" },
+                    React.createElement("button", { onClick: exportExcel, className: "flex items-center gap-2 px-3 py-2 rounded-md text-sm", style: { background: COLOR.gold, color: COLOR.ink, fontWeight: 600 } },
+                        React.createElement(IconFileGrid, { size: 15 }),
+                        " Excel"),
+                    React.createElement("button", { onClick: exportJSON, className: "flex items-center gap-2 px-3 py-2 rounded-md text-sm", style: { background: COLOR.paper, color: COLOR.ink, fontWeight: 600 } },
+                        React.createElement(IconFile, { size: 15 }),
+                        " JSON"))),
+            exportMsg && (React.createElement("p", { className: "max-w-6xl mx-auto mt-2", style: { color: COLOR.gold, fontSize: 12 } },
+                React.createElement(IconDownload, { size: 12, style: { display: "inline", marginRight: 4 } }),
+                " ",
+                exportMsg))),
+        React.createElement("div", { className: "max-w-6xl mx-auto px-6 md:px-10 pt-6 flex gap-1 flex-wrap" }, tabs.map((t) => {
+            const active = itrType === t.key;
+            return (React.createElement("button", { key: t.key, onClick: () => setItrType(t.key), className: "px-4 py-3 rounded-t-lg text-left", style: {
+                    background: active ? COLOR.card : "#EFE8D8",
+                    border: `1px solid ${COLOR.line}`,
+                    borderBottom: active ? `1px solid ${COLOR.card}` : `1px solid ${COLOR.line}`,
+                    marginBottom: -1,
+                    opacity: active ? 1 : 0.8,
+                } },
+                React.createElement("div", { style: { fontFamily: FONT.display, fontSize: 16, color: COLOR.ink } }, t.label),
+                React.createElement("div", { style: { fontSize: 11, color: COLOR.slate } }, t.sub)));
+        })),
+        React.createElement("div", { className: "max-w-6xl mx-auto px-6 md:px-10 pb-16 grid grid-cols-1 lg:grid-cols-5 gap-6", style: { borderTop: `1px solid ${COLOR.line}`, paddingTop: 24 } },
+            React.createElement("div", { className: "lg:col-span-3" },
+                React.createElement(Section, { title: "Personal Details", eyebrow: "Step 1 \u00B7 Form Required" },
+                    React.createElement(TextField, { label: "Full Name (as per PAN)", value: fullName, onChange: setFullName, placeholder: "e.g. RAHUL SHARMA" }),
+                    React.createElement(TextField, { label: "PAN", value: pan, onChange: setPan, placeholder: "ABCDE1234F", maxLength: 10, uppercase: true, hint: "10-character Permanent Account Number \u2014 mandatory for filing." }),
+                    React.createElement(TextField, { label: "Aadhaar Number", value: aadhaar, onChange: setAadhaar, placeholder: "XXXX XXXX XXXX", maxLength: 14, hint: "Mandatory to link with PAN as per Sec 139AA." }),
+                    React.createElement(TextField, { label: "Date of Birth", value: dob, onChange: setDob, placeholder: "DD/MM/YYYY" }),
+                    React.createElement(TextField, { label: "Father's Name", value: fatherName, onChange: setFatherName, placeholder: "e.g. SURESH SHARMA" }),
+                    React.createElement(SelectField, { label: "Residential Status", value: residentialStatus, onChange: setResidentialStatus, options: [
+                            { value: "resident", label: "Resident" },
+                            { value: "rnor", label: "Resident but Not Ordinarily Resident (RNOR)" },
+                            { value: "nri", label: "Non-Resident (NRI)" },
+                        ], hint: "Determines which global income is taxable in India \u2014 this tool assumes India-source income only." }),
+                    React.createElement(SelectField, { label: "Return Filed Under", value: filingSection, onChange: setFilingSection, options: [
+                            { value: "139(1)", label: "Sec 139(1) — On or before due date" },
+                            { value: "139(4)", label: "Sec 139(4) — Belated Return" },
+                            { value: "139(5)", label: "Sec 139(5) — Revised Return" },
+                            { value: "139(8A)", label: "Sec 139(8A) — Updated Return (ITR-U)" },
+                        ] }),
+                    React.createElement(TextField, { label: "Mobile Number", value: mobile, onChange: setMobile, placeholder: "10-digit mobile", maxLength: 10 }),
+                    React.createElement(TextField, { label: "Email Address", value: email, onChange: setEmail, placeholder: "name@example.com" }),
+                    React.createElement("div", { className: "sm:col-span-2" },
+                        React.createElement(TextField, { label: "Address", value: addressLine, onChange: setAddressLine, placeholder: "Flat/House No., Street, Locality" })),
+                    React.createElement(TextField, { label: "City", value: city, onChange: setCity }),
+                    React.createElement(TextField, { label: "State", value: state, onChange: setState }),
+                    React.createElement(TextField, { label: "PIN Code", value: pincode, onChange: setPincode, maxLength: 6 }),
+                    React.createElement(TextField, { label: "Bank Name (for refund credit)", value: bankName, onChange: setBankName }),
+                    React.createElement(TextField, { label: "Bank Account Number", value: bankAccount, onChange: setBankAccount }),
+                    React.createElement(TextField, { label: "IFSC Code", value: ifsc, onChange: setIfsc, placeholder: "e.g. HDFC0001234", uppercase: true, hint: "Pre-validated bank account + IFSC is mandatory for refund credit." })),
+                React.createElement(Section, { title: "Assessee Details", eyebrow: "Step 2" },
+                    React.createElement(SelectField, { label: "Age Category", value: ageCategory, onChange: setAgeCategory, options: [
+                            { value: "below60", label: "Below 60 years" },
+                            { value: "senior", label: "60 to 80 years (Senior Citizen)" },
+                            { value: "superSenior", label: "Above 80 years (Super Senior)" },
+                        ], hint: "Old Regime basic exemption rises with age (\u20B92.5L / \u20B93L / \u20B95L). New Regime slabs are the same for every age." })),
+                React.createElement(Section, { title: "Income from Salary", eyebrow: "Step 3" },
+                    React.createElement(NumField, { label: "Gross Salary (CTC less perquisites, before deductions)", value: grossSalary, onChange: setGrossSalary }),
+                    React.createElement(NumField, { label: "Basic Salary (Annual)", value: basicSalary, onChange: setBasicSalary, hint: "Used to auto-calculate HRA exemption and the Sec 80CCD(2) employer-NPS cap." }),
+                    React.createElement(NumField, { label: "HRA Received (Annual)", value: hraReceived, onChange: setHraReceived, hint: "Sec 10(13A) \u2014 exempt only under the Old Regime." }),
+                    React.createElement(NumField, { label: "Rent Paid (Annual)", value: rentPaid, onChange: setRentPaid }),
+                    React.createElement(CheckField, { label: "Living in a metro city (Delhi/Mumbai/Chennai/Kolkata)", checked: isMetro, onChange: setIsMetro, hint: "Metro limit is 50% of basic salary; non-metro is 40%." }),
+                    React.createElement(NumField, { label: "Other Exemptions (LTA, etc.)", value: otherSalaryExemption, onChange: setOtherSalaryExemption, hint: "Old Regime only." }),
+                    React.createElement(ReadOnlyRow, { label: `HRA Exemption auto-computed (Old Regime) — least of HRA received, rent − 10% of basic, and ${isMetro ? "50%" : "40%"} of basic`, value: formatINR(oldCalc.hraExemption) }),
+                    React.createElement(ReadOnlyRow, { label: "Standard Deduction auto-applied", value: `${formatINR(50000)} (Old) · ${formatINR(75000)} (New)` })),
+                React.createElement(Section, { title: "Income from House Property", eyebrow: "Step 4" },
+                    React.createElement("div", { className: "sm:col-span-2" },
+                        React.createElement(CheckField, { label: "Property is self-occupied", checked: selfOccupied, onChange: setSelfOccupied })),
+                    !selfOccupied && (React.createElement(React.Fragment, null,
+                        React.createElement(NumField, { label: "Annual Rent Received", value: annualValueLetOut, onChange: setAnnualValueLetOut }),
+                        React.createElement(NumField, { label: "Municipal Taxes Paid", value: municipalTaxes, onChange: setMunicipalTaxes, hint: "Sec 23 \u2014 deductible from gross annual value before the 30% standard deduction." }))),
+                    React.createElement(NumField, { label: "Home Loan Interest Paid", value: homeLoanInterest, onChange: setHomeLoanInterest, hint: selfOccupied ? "Sec 24(b) — auto-capped at ₹2,00,000; not allowed at all under the New Regime." : "Fully deductible against rent, no cap, under both regimes." })),
+                showCapGains && (React.createElement(Section, { title: "Capital Gains (Equity & Equity Funds)", eyebrow: "Step 5" },
+                    React.createElement(NumField, { label: "Short-Term Capital Gains", value: stcgEquity, onChange: setStcgEquity, hint: "Sec 111A \u2014 flat 20% (STT-paid listed equity/equity funds, held \u2264 12 months)." }),
+                    React.createElement(NumField, { label: "Long-Term Capital Gains", value: ltcgEquity, onChange: setLtcgEquity, hint: "Sec 112A \u2014 first \u20B91,25,000 exempt per year; balance taxed at 12.5%, no indexation." }))),
+                showBusiness && (React.createElement(Section, { title: "Income from Business / Profession", eyebrow: "Step 6" },
+                    React.createElement(SelectField, { label: "Computation Basis", value: businessType, onChange: setBusinessType, options: [
+                            { value: "presumptive44AD", label: "Presumptive — Sec 44AD (Business)" },
+                            { value: "presumptive44ADA", label: "Presumptive — Sec 44ADA (Profession)" },
+                            { value: "regular", label: "Regular Books of Account" },
+                        ], hint: "44AD applies to businesses with turnover up to \u20B93 crore (mostly digital receipts); 44ADA to professionals with receipts up to \u20B975 lakh." }),
+                    businessType === "regular" ? (React.createElement(NumField, { label: "Net Profit as per P&L", value: netProfitRegular, onChange: setNetProfitRegular })) : (React.createElement(NumField, { label: businessType === "presumptive44AD" ? "Gross Turnover" : "Gross Receipts", value: turnoverOrReceipts, onChange: setTurnoverOrReceipts, hint: businessType === "presumptive44AD" ? "Profit auto-computed at 6% (digital receipts) or 8% (cash) of turnover." : "Profit auto-computed at 50% of gross receipts." })),
+                    businessType === "presumptive44AD" && (React.createElement("div", { className: "sm:col-span-2" },
+                        React.createElement(CheckField, { label: "Receipts through digital / banking channels (6% rate applies)", checked: digitalReceipts, onChange: setDigitalReceipts }))),
+                    React.createElement(ReadOnlyRow, { label: "Business income auto-computed", value: `${formatINR(oldCalc.businessIncome)}` }))),
+                React.createElement(Section, { title: "Income from Other Sources", eyebrow: showBusiness ? "Step 7" : showCapGains ? "Step 6" : "Step 5" },
+                    React.createElement(NumField, { label: "Savings Bank / FD Interest", value: interestIncome, onChange: setInterestIncome }),
+                    React.createElement(NumField, { label: "Dividend Income", value: dividendIncome, onChange: setDividendIncome, hint: "Fully taxable at slab rate since dividend distribution tax was abolished." }),
+                    React.createElement(NumField, { label: "Other Income", value: otherIncome, onChange: setOtherIncome })),
+                React.createElement(Section, { title: "Deductions \u2014 Chapter VI-A", eyebrow: "Step 8" },
+                    React.createElement(NumField, { label: "Sec 80C (PF, ELSS, Life Insurance...)", value: deduction80C, onChange: setDeduction80C, hint: "Old Regime only \u2014 auto-capped at \u20B91,50,000." }),
+                    React.createElement(NumField, { label: "Sec 80D (Health Insurance Premium)", value: deduction80D, onChange: setDeduction80D, hint: `Old Regime only — auto-capped at ${ageCategory === "below60" ? "₹25,000" : "₹50,000 (senior citizen rate)"}.` }),
+                    React.createElement(NumField, { label: "Sec 80CCD(1B) \u2014 NPS Self Contribution", value: deduction80CCD1B, onChange: setDeduction80CCD1B, hint: "Old Regime only \u2014 auto-capped at \u20B950,000, over and above 80C." }),
+                    React.createElement(NumField, { label: "Sec 80CCD(2) \u2014 Employer NPS Contribution", value: deduction80CCD2, onChange: setDeduction80CCD2, hint: `Allowed under both regimes — auto-capped at ${selectedRegime === "new" ? "14%" : "10%"} of basic salary.` }),
+                    React.createElement(NumField, { label: "Sec 80TTA/80TTB \u2014 Savings Interest", value: deduction80TTA, onChange: setDeduction80TTA, hint: `Old Regime only — auto-capped at ${ageCategory === "below60" ? "₹10,000 (80TTA)" : "₹50,000 (80TTB, senior citizen)"}.` }),
+                    React.createElement(NumField, { label: "Sec 80G (Donations)", value: deduction80G, onChange: setDeduction80G, hint: "Old Regime only \u2014 actual eligible amount as per donee category (50%/100%)." }),
+                    React.createElement(NumField, { label: "Other Chapter VI-A Deductions", value: otherDeductions, onChange: setOtherDeductions, hint: "Old Regime only." })),
+                React.createElement(Section, { title: "Taxes Already Paid", eyebrow: "Step 9" },
+                    React.createElement(NumField, { label: "TDS / TCS", value: tdsPaid, onChange: setTdsPaid }),
+                    React.createElement(NumField, { label: "Advance Tax / Self-Assessment Tax", value: advanceTaxPaid, onChange: setAdvanceTaxPaid }))),
+            React.createElement("div", { className: "lg:col-span-2" },
+                React.createElement("div", { className: "lg:sticky", style: { top: 24 } },
+                    React.createElement("div", { className: "rounded-lg p-5 mb-5", style: { background: COLOR.card, border: `1px solid ${COLOR.line}` } },
+                        React.createElement("div", { className: "flex items-center gap-2 mb-4" },
+                            React.createElement(IconArrows, { size: 16, color: COLOR.gold }),
+                            React.createElement("h3", { style: { fontFamily: FONT.display, fontSize: 18, color: COLOR.ink } }, "Regime Comparison")),
+                        [{ key: "old", label: "Old Regime", calc: oldCalc }, { key: "new", label: "New Regime", calc: newCalc }].map((r) => (React.createElement("div", { key: r.key, className: "mb-3" },
+                            React.createElement("div", { className: "flex justify-between items-baseline mb-1" },
+                                React.createElement("span", { style: { fontSize: 13, color: COLOR.ink, fontWeight: recommended === r.key ? 600 : 400 } },
+                                    r.label,
+                                    " ",
+                                    recommended === r.key && React.createElement("span", { style: { color: COLOR.green, fontSize: 11 } }, "\u00B7 lower tax")),
+                                React.createElement("span", { style: { fontFamily: FONT.mono, fontSize: 13, color: COLOR.ink } }, formatINR(r.calc.totalTaxLiability))),
+                            React.createElement("div", { className: "rounded-full overflow-hidden", style: { height: 8, background: "#EFE8D8" } },
+                                React.createElement("div", { style: {
+                                        width: `${(r.calc.totalTaxLiability / maxTax) * 100}%`,
+                                        height: "100%",
+                                        background: recommended === r.key ? COLOR.green : COLOR.gold,
+                                    } }))))),
+                        React.createElement("div", { className: "flex gap-2 mt-4" }, ["old", "new"].map((r) => (React.createElement("button", { key: r, onClick: () => setSelectedRegime(r), className: "flex-1 py-2 rounded-md text-sm", style: {
+                                background: selectedRegime === r ? COLOR.ink : "#EFE8D8",
+                                color: selectedRegime === r ? COLOR.paper : COLOR.ink,
+                                fontFamily: FONT.body,
+                                fontWeight: 500,
+                            } },
+                            "File under ",
+                            r === "old" ? "Old" : "New"))))),
+                    React.createElement("div", { className: "rounded-lg p-5 mb-5", style: { background: COLOR.card, border: `1px solid ${COLOR.line}` } },
+                        React.createElement("div", { className: "flex items-center gap-2 mb-3" },
+                            React.createElement(IconLandmark, { size: 16, color: COLOR.gold }),
+                            React.createElement("h3", { style: { fontFamily: FONT.display, fontSize: 18, color: COLOR.ink } },
+                                selectedRegime === "old" ? "Old Regime" : "New Regime",
+                                " \u2014 Computation")),
+                        React.createElement(LedgerRow, { label: "Income from Salary", value: selected.netSalary }),
+                        React.createElement(LedgerRow, { label: "Income from House Property", value: selected.hpIncome, negative: selected.hpIncome < 0 }),
+                        showBusiness && React.createElement(LedgerRow, { label: "Income from Business / Profession", value: selected.businessIncome }),
+                        React.createElement(LedgerRow, { label: "Income from Other Sources", value: selected.otherSourcesIncome }),
+                        React.createElement(LedgerRow, { label: "Gross Total Income (normal rate)", value: selected.normalIncome, bold: true }),
+                        React.createElement(LedgerRow, { label: "Less: Chapter VI-A Deductions", value: -selected.deductions, negative: true }),
+                        React.createElement(LedgerRow, { label: "Taxable Income (normal rate)", value: selected.taxableNormalIncome, bold: true }),
+                        showCapGains && React.createElement(LedgerRow, { label: "Tax on Capital Gains (special rate)", value: selected.capGainsTax }),
+                        React.createElement(LedgerRow, { label: "Tax on Slab Income", value: selected.slab }),
+                        React.createElement(LedgerRow, { label: "Less: Rebate u/s 87A", value: -selected.rebate, negative: true }),
+                        selected.surchargeRate > 0 && React.createElement(LedgerRow, { label: `Add: Surcharge (${Math.round(selected.surchargeRate * 100)}%)`, value: selected.surcharge }),
+                        React.createElement(LedgerRow, { label: "Add: Health & Education Cess (4%)", value: selected.cess }),
+                        React.createElement(LedgerRow, { label: "Total Tax Liability", value: selected.totalTaxLiability, bold: true }),
+                        React.createElement(LedgerRow, { label: "Less: TDS / Advance Tax Paid", value: -selected.taxesPaid, negative: true })),
+                    React.createElement("div", { className: "flex flex-col items-center py-6" },
+                        React.createElement("div", { className: "rounded-full flex flex-col items-center justify-center text-center", style: {
+                                width: 176, height: 176,
+                                border: `4px double ${selected.netPayable > 0 ? COLOR.vermilion : COLOR.green}`,
+                                transform: "rotate(-4deg)",
+                                color: selected.netPayable > 0 ? COLOR.vermilion : COLOR.green,
+                            } },
+                            React.createElement(IconStamp, { size: 22, strokeWidth: 1.5, className: "mb-1" }),
+                            React.createElement("span", { style: { fontFamily: FONT.body, fontSize: 10, letterSpacing: "0.12em" }, className: "uppercase" }, selected.netPayable > 0 ? "Tax Payable" : "Refund Due"),
+                            React.createElement("span", { style: { fontFamily: FONT.display, fontSize: 22, fontWeight: 700 } }, formatINR(Math.abs(selected.netPayable))))),
+                    React.createElement("div", { className: "flex gap-2 mb-5" },
+                        React.createElement("button", { onClick: exportExcel, className: "flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm", style: { background: COLOR.gold, color: COLOR.ink, fontWeight: 600 } },
+                            React.createElement(IconFileGrid, { size: 15 }),
+                            " Download Excel"),
+                        React.createElement("button", { onClick: exportJSON, className: "flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm", style: { background: COLOR.ink, color: COLOR.paper, fontWeight: 600 } },
+                            React.createElement(IconFile, { size: 15 }),
+                            " Download JSON")),
+                    React.createElement("div", { className: "rounded-lg p-4 flex gap-3", style: { background: "#EFE8D8", border: `1px solid ${COLOR.line}` } },
+                        React.createElement(IconAlert, { size: 18, color: COLOR.vermilion, style: { flexShrink: 0, marginTop: 2 } }),
+                        React.createElement("p", { style: { fontFamily: FONT.body, fontSize: 12, color: COLOR.slate, lineHeight: 1.5 } }, "This is a simplified, rule-based estimate for planning purposes \u2014 it does not cover indexation, loss set-off/carry-forward, or every special-rate asset class. The JSON export mirrors this computation for your reference; it is not the official Income Tax Department schema. Verify all figures on the e-filing portal or with a tax professional before filing.")))))));
+}
+
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(React.createElement(ITRDashboard));
+</script>
+</body>
+</html>
